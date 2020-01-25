@@ -27,7 +27,7 @@ from pymavlink import mavutil
 import time
 
 # Create the connection
-master = mavutil.mavlink_connection('udp:0.0.0.0:14550')
+master = mavutil.mavlink_connection('udp:0.0.0.0:15000')
 # Wait a heartbeat before sending commands
 master.wait_heartbeat()
 
