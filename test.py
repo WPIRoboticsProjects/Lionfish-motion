@@ -1,6 +1,5 @@
 # Import mavutil
 from pymavlink import mavutil
-import time
 
 # Create the connection
 master = mavutil.mavlink_connection('udpin:0.0.0.0:15000')
@@ -23,16 +22,6 @@ def set_rc_channel_pwm(id, pwm=1500):
     # We only have 8 channels
     # https://mavlink.io/en/messages/common.html#RC_CHANNELS_OVERRIDE
     if id < 9:
-
-        # Arm
-        # master.arducopter_arm() or:
-        master.mav.command_long_send(
-            master.target_system,
-            master.target_component,
-            mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
-            0,
-            1, 0, 0, 0, 0, 0, 0)
-
         rc_channel_values = [65535 for _ in range(8)]
         rc_channel_values[id - 1] = pwm
         master.mav.rc_channels_override_send(
@@ -43,8 +32,10 @@ def set_rc_channel_pwm(id, pwm=1500):
 # Set some roll
 set_rc_channel_pwm(2, 1600)
 
-i = 0
-while i < 20:
-    set_rc_channel_pwm(2, 1600)
-    # master.mav.heartbeat_send(mavutil.mavlink.MAV_TYPE_GCS, mavutil.mavlink.MAV_AUTOPILOT_INVALID, 192, 0, 4)
-    time.sleep(0.5)
+# Set some yaw
+set_rc_channel_pwm(4, 1600)
+
+# The camera pwm value is the servo speed
+# and not the servo position
+# Set camera tilt to 45º with full speed
+# set_rc_channel_pwm(8, 1900)

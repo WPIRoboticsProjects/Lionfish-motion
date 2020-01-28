@@ -1,20 +1,27 @@
 # Import mavutil
+
 from pymavlink import mavutil
 import time
 from signal import signal, SIGINT
 from sys import exit
 
-# def handler(signal_received, frame):
-#     # Handle any cleanup here
-#     print('SIGINT or CTRL-C detected. Exiting gracefully')
-#     exit()
+# Pwm channel pins
+# 0 - pitch
+# 1 - roll
+# 2 - up
+# 3 - yaw
+# 4 - forward
+# 5 - lateral
+# 6 - camera pan
+# 7 - camera tilt
+# 8 - lights 1 level
 
 def run(master):
 
     while(True):
         try:
             command = input("Command: ")
-            print("Given command: " + command)
+            print("Given command: " + command + "\n")
             commands = command.split()
             verb = lookup_button(commands[0])
             if verb == -2:
@@ -30,44 +37,72 @@ def run(master):
                         0,
                         0,
                         buttons)
-                else:
+                elif verb == 13:
+                    # turn to given angle
+                    val = int(commands[1])  # throttle
+                    rel_angle = float(commands[2])  # target angle
+                    if val > 0 and val <= 100:
+                        output = (val*5) + 1500
+                        if rel_angle < 0:
+                            output = (-val * 5) + 1500
 
+                        org_heading = float(getMessage(master)['heading'])
+                        curr_heading = org_heading
+                        old_time = time.time()
+
+                        while continue_turn(org_heading, curr_heading, rel_angle):
+                            write_pwm(master, 3, output)
+                            curr_heading = float(getMessage(master)['heading'])
+                            new_time = time.time()
+                            print(new_time - old_time)
+                            old_time = new_time
+
+                    elif val == 0:
+                        write_pwm(master, 3, 0)
+                elif verb == 14:
+                    # drive forward
                     val = int(commands[1])
-                    if val <= 1000 and val >= -1000:
-                        buttons = 1 << 10
-                        i = 0
-                        while(i < 3000):
-                            master.mav.manual_control_send(
-                                master.target_system,
-                                0,
-                                0,
-                                0,
-                                val,
-                                buttons)
-                            time.sleep(0.001)
-                            i += 1
-                        master.mav.manual_control_send(
-                            master.target_system,
-                            0,
-                            0,
-                            0,
-                            0,
-                            buttons)
-                    # master.mav.command_long_send(
-                    #     master.target_system,
-                    #     master.target_component,
-                    #     mavutil.mavlink.MAV_CMD_NAV_SET_YAW_SPEED,
-                    #     0,
-                    #     45, 0.1, 1, 0, 0, 0, 0)
-                    # master.mav.command_long_send(
-                    #     master.target_system,
-                    #     master.target_component,
-                    #     mavutil.mavlink.MAV_CMD_CONDITION_YAW,
-                    #     0,
-                    #     90, 0.1, -1, 1, 0, 0, 0)
-                    # while True:
-                    #     master.mav.heartbeat_send(mavutil.mavlink.MAV_TYPE_GCS, mavutil.mavlink.MAV_AUTOPILOT_INVALID, 192, 0, 4)
-                    #     time.sleep(0.1)
+                    time_to_drive = float(commands[2])
+                    if val > 0 and val <= 100:
+                        output = (val * 5) + 1500
+                        end_time = time.time() + time_to_drive
+                        while time.time() < end_time:
+                            write_pwm(master, 4, output)
+                            time.sleep(0.05)
+
+                elif verb == 15:
+                    # drive backward
+                    val = int(commands[1])
+                    time_to_drive = float(commands[2])
+                    if val > 0 and val <= 100:
+                        output = (-val * 5) + 1500
+                        end_time = time.time() + time_to_drive
+                        while time.time() < end_time:
+                            write_pwm(master, 4, output)
+                            time.sleep(0.05)
+                elif verb == 16:
+                    # dive to given depth
+                    val = int(commands[1])
+                    target_depth = float(commands[2])
+                    if val > 0 and val <= 100:
+                        curr_depth = float(getMessage(master)['alt'])
+                        output = (val*5) + 1500
+                        if(target_depth - curr_depth) < 0:
+                            output = (-val*5) + 1500
+
+                        while abs(target_depth - curr_depth) > 0.2:
+                            write_pwm(master, 2, output)
+                            curr_depth = float(getMessage(master)['alt'])
+                    elif val == 0:
+                        write_pwm(master, 2, 0)
+                elif verb == 100:
+                    print(getMessage(master))
+                else:
+                    pass
+            else:
+                print("Unknown command, list of available commands: \n")
+                print_cmd_list()
+                print("")
         except Exception as e:
             print("Incorrect command: " + str(e))
             exit()
@@ -95,20 +130,84 @@ def lookup_button(string_in):
         return 13
     elif string_in == "forward":
         return 14
-    elif string_in == "test":
+    elif string_in == "reverse":
         return 15
+    elif string_in == "dive":
+        return 16
+    elif string_in == "hud":
+        return 100
     elif string_in == "quit":
+        return -2
+    elif string_in == "q":
         return -2
     else:
         return -1
+
+def write_pwm(master, output_channel, output_val):
+    rc_channel_values = [65535 for _ in range(8)]
+    rc_channel_values[output_channel] = output_val  # vertical
+    master.mav.rc_channels_override_send(
+        master.target_system,  # target_system
+        master.target_component,  # target_component
+        *rc_channel_values)
+
+def continue_turn(org_heading, curr_heading, rel_angle):
+    if get_quad(curr_heading) == get_quad(org_heading + rel_angle):
+        error = abs((org_heading + rel_angle) - curr_heading)
+        print(error)
+        if error < 5:
+            return False
+        else:
+            return True
+    else:
+        return True
+
+def get_quad(angle):
+    if angle >= 0 and angle < 90:
+        return 0
+    elif angle >= 90 and angle < 180:
+        return 1
+    elif angle >= 180 and angle < 270:
+        return 2
+    elif angle >= 270 and angle <= 360:
+        return 3
+
+def getMessage(master):
+    while True:
+        msg = master.recv_match()
+        if not msg:
+            continue
+        # print(msg.get_type())
+        if msg.get_type() == 'VFR_HUD':
+            # print("\n\n*****Got message: %s*****" % msg.get_type())
+            # print("Message: %s" % msg)
+            # print("\nAs dictionary: %s" % msg.to_dict())
+            return msg.to_dict()
+
+def print_cmd_list():
+    print("arm - arm the motors")
+    print("disarm - disarm the motors")
+    print("depth - depth mode")
+    print("stab - stabilize mode")
+    print("man - manual mode")
+    print("lights - toggle lights")
+    print("hold - hold last sent command")
+    print("camdown - move camera down")
+    print("camup - move camera up")
+    print("yaw <0-100% throttle> <relative degrees> - turn robot")
+    print("forward <0-100% throttle> <time in seconds> - drive forward for x seconds")
+    print("reverse <0-100% throttle> <time in seconds> - drive reverse for x seconds")
+    print("dive <0-100% throttle> <target depth (m)> - dive to given depth")
+    print("hud - print out the hud data")
+    print("q - quit the program")
+
 
 def main():
     # Create the connection
     master = mavutil.mavlink_connection('udpin:0.0.0.0:15000')
     # Wait a heartbeat before sending commands
     master.wait_heartbeat()
-    print(master.target_component)
-    print(mavutil.mavlink.MAV_CMD_CONDITION_YAW)
+
     run(master)
 
 
