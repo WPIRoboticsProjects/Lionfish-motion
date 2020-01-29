@@ -16,6 +16,9 @@ from sys import exit
 # 7 - camera tilt
 # 8 - lights 1 level
 
+# constants
+TURN_BUFFER = 5
+
 def run(master):
 
     while(True):
@@ -29,72 +32,38 @@ def run(master):
 
             if verb != -1:
                 if verb < 13:
-                    buttons = 1 << verb
-                    master.mav.manual_control_send(
-                        master.target_system,
-                        0,
-                        0,
-                        0,
-                        0,
-                        buttons)
+                    button_press(master, verb)
                 elif verb == 13:
                     # turn to given angle
                     val = int(commands[1])  # throttle
                     rel_angle = float(commands[2])  # target angle
-                    if val > 0 and val <= 100:
-                        output = (val*5) + 1500
-                        if rel_angle < 0:
-                            output = (-val * 5) + 1500
-
-                        org_heading = float(getMessage(master)['heading'])
-                        curr_heading = org_heading
-                        old_time = time.time()
-
-                        while continue_turn(org_heading, curr_heading, rel_angle):
-                            write_pwm(master, 3, output)
-                            curr_heading = float(getMessage(master)['heading'])
-                            new_time = time.time()
-                            print(new_time - old_time)
-                            old_time = new_time
-
-                    elif val == 0:
-                        write_pwm(master, 3, 0)
+                    turn_angle(master, val, rel_angle)
                 elif verb == 14:
                     # drive forward
                     val = int(commands[1])
                     time_to_drive = float(commands[2])
-                    if val > 0 and val <= 100:
-                        output = (val * 5) + 1500
-                        end_time = time.time() + time_to_drive
-                        while time.time() < end_time:
-                            write_pwm(master, 4, output)
-                            time.sleep(0.05)
-
+                    drive_forward(master, val, time_to_drive)
                 elif verb == 15:
                     # drive backward
                     val = int(commands[1])
                     time_to_drive = float(commands[2])
-                    if val > 0 and val <= 100:
-                        output = (-val * 5) + 1500
-                        end_time = time.time() + time_to_drive
-                        while time.time() < end_time:
-                            write_pwm(master, 4, output)
-                            time.sleep(0.05)
+                    drive_backward(master, val, time_to_drive)
                 elif verb == 16:
                     # dive to given depth
                     val = int(commands[1])
                     target_depth = float(commands[2])
-                    if val > 0 and val <= 100:
-                        curr_depth = float(getMessage(master)['alt'])
-                        output = (val*5) + 1500
-                        if(target_depth - curr_depth) < 0:
-                            output = (-val*5) + 1500
+                    depth(master, val, target_depth)
+                elif verb == 17:
+                    # run square
+                    drive_forward(master, 50, 8)
+                    turn_angle(master, 40, 90)
+                    drive_forward(master, 50, 4)
+                    turn_angle(master, 40, 90)
+                    drive_forward(master, 50, 8)
+                    turn_angle(master, 40, 90)
+                    drive_forward(master, 50, 4)
+                    turn_angle(master, 40, 90)
 
-                        while abs(target_depth - curr_depth) > 0.2:
-                            write_pwm(master, 2, output)
-                            curr_depth = float(getMessage(master)['alt'])
-                    elif val == 0:
-                        write_pwm(master, 2, 0)
                 elif verb == 100:
                     print(getMessage(master))
                 else:
@@ -134,6 +103,8 @@ def lookup_button(string_in):
         return 15
     elif string_in == "dive":
         return 16
+    elif string_in == "square":
+        return 17
     elif string_in == "hud":
         return 100
     elif string_in == "quit":
@@ -143,24 +114,118 @@ def lookup_button(string_in):
     else:
         return -1
 
+def turn_angle(master, val, rel_angle):
+    if val > 0 and val <= 100:
+        output = (val * 5) + 1500
+        if rel_angle < 0:
+            output = (-val * 5) + 1500
+
+        org_heading = float(getMessage(master)['heading'])
+        curr_heading = org_heading
+        old_time = time.time()
+
+        while continue_turn(org_heading, curr_heading, rel_angle):
+            write_pwm(master, 3, output)
+            curr_heading = float(getMessage(master)['heading'])
+            new_time = time.time()
+            print(new_time - old_time)
+            old_time = new_time
+
+    elif val == 0:
+        write_pwm(master, 3, 0)
+
+def drive_forward(master, val, time_to_drive):
+    if val > 0 and val <= 100:
+        output = (val * 5) + 1500
+        end_time = time.time() + time_to_drive
+        while time.time() < end_time:
+            write_pwm(master, 4, output)
+            time.sleep(0.05)
+
+def drive_backward(master, val, time_to_drive):
+    if val > 0 and val <= 100:
+        output = (-val * 5) + 1500
+        end_time = time.time() + time_to_drive
+        while time.time() < end_time:
+            write_pwm(master, 4, output)
+            time.sleep(0.05)
+
+def depth(master, val, target_depth):
+    if val > 0 and val <= 100:
+        curr_depth = float(getMessage(master)['alt'])
+        output = (val * 5) + 1500
+        if (target_depth - curr_depth) < 0:
+            output = (-val * 5) + 1500
+
+        while abs(target_depth - curr_depth) > 0.2:
+            write_pwm(master, 2, output)
+            curr_depth = float(getMessage(master)['alt'])
+    elif val == 0:
+        write_pwm(master, 2, 0)
+
+def button_press(master, verb):
+    buttons = 1 << verb
+    master.mav.manual_control_send(
+        master.target_system,
+        0,
+        0,
+        0,
+        0,
+        buttons)
+
+def clear_motors(master):
+    rc_channel_values = [0 for _ in range(8)]
+    master.mav.rc_channels_override_send(
+        master.target_system,  # target_system
+        master.target_component,  # target_component
+        *rc_channel_values)
+
 def write_pwm(master, output_channel, output_val):
     rc_channel_values = [65535 for _ in range(8)]
-    rc_channel_values[output_channel] = output_val  # vertical
+    rc_channel_values[output_channel] = output_val
     master.mav.rc_channels_override_send(
         master.target_system,  # target_system
         master.target_component,  # target_component
         *rc_channel_values)
 
 def continue_turn(org_heading, curr_heading, rel_angle):
-    if get_quad(curr_heading) == get_quad(org_heading + rel_angle):
-        error = abs((org_heading + rel_angle) - curr_heading)
-        print(error)
-        if error < 5:
+
+    final_heading = org_heading + rel_angle
+    if final_heading > 360:
+        final_heading -= 360
+    if final_heading < 0:
+        final_heading += 360
+
+    if (final_heading + TURN_BUFFER) > 360:
+        if abs(final_heading - 360 - curr_heading) < TURN_BUFFER:
             return False
-        else:
-            return True
+    if (final_heading - TURN_BUFFER) < 0:
+        if abs(final_heading + 360 - curr_heading) < TURN_BUFFER:
+            return False
+    if abs(final_heading - curr_heading) < TURN_BUFFER:
+        return False
     else:
         return True
+
+    # if get_quad(final_heading) == 0:
+    #     if rel_angle > 0:
+    #         if (final_heading + rel_angle)
+    #         if (final_heading + rel_angle):
+    #             pass
+    #         if (final_heading - rel_angle)
+    #     else:
+    #         pass
+    # elif get_quad(final_heading) == 3:
+    #     pass
+    # else:
+    #     if get_quad(curr_heading) == get_quad(final_heading):
+    #         error = abs(final_heading - curr_heading)
+    #         if error < 5:
+    #             return False
+    #         else:
+    #             return True
+    #     else:
+    #         return True
 
 def get_quad(angle):
     if angle >= 0 and angle < 90:
