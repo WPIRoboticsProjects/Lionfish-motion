@@ -1,9 +1,11 @@
 # Import mavutil
 
 from pymavlink import mavutil
+from multiprocessing import Process, Queue
 import time
 from signal import signal, SIGINT
 from sys import exit
+import serial
 
 # Pwm channel pins
 # 0 - pitch
@@ -280,6 +282,27 @@ def print_cmd_list():
     print("square - run a rectangle")
     print("q - quit the program")
 
+def arduinoComms(q, message):
+    i = 0
+    while True:
+        q.put(i)
+        i += 1
+        time.sleep(0.01)
+    # print("in comms")
+    # ser = serial.Serial('COM3', 9600, timeout=0)
+    # print("opened serial")
+    # print(message)
+    # time.sleep(2)
+    # ser.write(str.encode(message))
+    # while True:
+    #     try:
+    #         returnData = ser.readline()
+    #         if returnData != b'':
+    #             print(returnData)
+    #             q.put(returnData)
+    #     except ser.SerialTimeoutException:
+    #         print('Data could not be read')
+
 
 def main():
     # Create the connection
@@ -292,4 +315,14 @@ def main():
 
 if __name__ == '__main__':
     # signal(SIGINT, handler)
+    q = Queue()
+    arduinoProcess = Process(target=arduinoComms, args=(q,"0"))
+    arduinoProcess.start()
+    time.sleep(5)
+    print("data return: ", end='')
+    val = q.get()
+    for i in range(q.qsize()):
+        val = q.get()
+    print(val)
+
     main()
