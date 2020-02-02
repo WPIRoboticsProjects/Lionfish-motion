@@ -354,7 +354,9 @@ def recv_from_arduino(ser):
     return (ck)
 
 
-def arduino_comms(qToArduino, qFromArduino, ser):
+def arduino_comms(qToArduino, qFromArduino):
+    ser = serial.Serial("COM3", 115200, timeout=0)
+
     while True:
         if ser.inWaiting() > 0:
             try:
@@ -364,6 +366,7 @@ def arduino_comms(qToArduino, qFromArduino, ser):
             except:
                 # print("cannot read")
                 pass
+
 
 def process_arduino_data(message, qFromArduino):
     recvMessage = message.split()
@@ -383,11 +386,11 @@ def process_arduino_data(message, qFromArduino):
         # spear move update
 
 
-def actuate_spear(send_input):
-    if type(input) == 'int':
-        ser.write(("<" + str(send_input) + ">").encode('utf-8'))
-    else:
-        print("incorrect data type sent to spear")
+# def actuate_spear(send_input):
+#     if type(input) == 'int':
+#         ser.write(("<" + str(send_input) + ">").encode('utf-8'))
+#     else:
+#         print("incorrect data type sent to spear")
 
 if __name__ == '__main__':
     signal.signal(signal.SIGINT, handler)
@@ -399,9 +402,7 @@ if __name__ == '__main__':
     # Wait a heartbeat before sending commands
     master.wait_heartbeat()
 
-    ser = serial.Serial('COM3', 115200, timeout=0)
-
-    arduinoProcess = Process(target=arduino_comms, args=(qToArduino, qFromArduino, ser))
+    arduinoProcess = Process(target=arduino_comms, args=(qToArduino, qFromArduino,))
     arduinoProcess.daemon = True
     arduinoProcess.start()
 
