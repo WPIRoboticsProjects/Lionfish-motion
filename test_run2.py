@@ -71,7 +71,12 @@ def main_loop(master, main_loop_queue, qFromArduino, qToArduino):
                 if verb == -2:
                     handle_exit()
 
-                if verb != -1:
+                if verb == 101:
+                    if commands[1] == 1:
+                        print(forward_ping)
+                    elif commands[1] == 2:
+                        print(down_ping)
+                elif verb != -1:
                     motor_cmd_process = Process(target=motor_cmd, args=(master, verb, commands))
                     motor_cmd_process.daemon = True
                     motor_cmd_process.start()
@@ -144,6 +149,8 @@ def lookup_button(string_in):
         return 17
     elif string_in == "hud":
         return 100
+    elif string_in == "ping":
+        return 101
     elif string_in == "quit":
         return -2
     elif string_in == "q":
@@ -327,6 +334,7 @@ def print_cmd_list():
     print("reverse <0-100% throttle> <time in seconds> - drive reverse for x seconds")
     print("dive <0-100% throttle> <target depth (m)> - dive to given depth")
     print("hud - print out the hud data")
+    print("ping <ID> - return ping data from given ID, start at 1")
     print("square - run a rectangle")
     print("q - quit the program")
 
