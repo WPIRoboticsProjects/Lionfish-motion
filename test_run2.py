@@ -28,10 +28,21 @@ def handler(signum, frame):
 
 def handle_exit():
     print("Exiting")
-
+    
 
 def run(master, qFromArduino, qToArduino):
+    main_loop_queue = Queue()
+    main_loop_process = Process(target=main_loop, args=(master, main_loop_queue, qFromArduino, qToArduino,))
+    main_loop_process.daemon = True
+    main_loop_process.start()
 
+    cont_run = True
+    while cont_run:
+        command = input("Command: ")
+        main_loop_queue.put(command)
+
+
+def main_loop(master, main_loop_queue, qFromArduino, qToArduino):
     forward_ping = -100
     down_ping = -100
     ping1, ping2 = update_sensors(qFromArduino)
@@ -40,18 +51,12 @@ def run(master, qFromArduino, qToArduino):
     if ping2 != -100:
         down_ping = ping2
 
-    user_input_queue = Queue()
-    user_input_process = Process(target=handle_user_input, args=(user_input_queue,))
-    user_input_process.daemon = True
-    user_input_process.start()
-
     cont_run = True
     while cont_run:
         try:
 
-            if not user_input_queue.empty():
-                command = user_input_queue.get()
-                user_input_queue.join()
+            if not main_loop_queue.empty():
+                command = main_loop_queue.get()
                 # command = input("Command: ")
                 print("Given command: " + command + "\n")
                 commands = command.split()
@@ -68,12 +73,6 @@ def run(master, qFromArduino, qToArduino):
                     print_cmd_list()
                     print("")
 
-                # restart user input thread
-                user_input_queue = Queue()
-                user_input_process = Process(target=handle_user_input, args=(user_input_queue,))
-                user_input_process.daemon = True
-                user_input_process.start()
-
             # update sensors
             ping1, ping2 = update_sensors(qFromArduino)
             if ping1 != -100:
@@ -84,7 +83,6 @@ def run(master, qFromArduino, qToArduino):
         except Exception as e:
             print("Incorrect command: " + str(e))
             exit()
-
 
 def update_sensors(q):
 
@@ -105,11 +103,6 @@ def update_sensors(q):
                 ping2_val = val[1]
         print("ping1: %f, ping2: %f" % (ping1_val, ping2_val))
     return ping1_val, ping2_val
-
-
-def handle_user_input(user_input_queue):
-    command = input("Command: ")
-    user_input_queue.put(command)
 
 
 def lookup_button(string_in):
