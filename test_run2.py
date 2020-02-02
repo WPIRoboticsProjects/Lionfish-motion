@@ -30,36 +30,52 @@ def handle_exit():
     print("Exiting")
 
 
-def run(q, master):
+def run(master, qFromArduino, qToArduino):
 
     forward_ping = -100
     down_ping = -100
-    ping1, ping2 = update_sensors(q)
+    ping1, ping2 = update_sensors(qFromArduino)
     if ping1 != -100:
         forward_ping = ping1
     if ping2 != -100:
         down_ping = ping2
 
+    user_input_queue = Queue()
+    user_input_process = Process(target=handle_user_input, args=(user_input_queue,))
+    user_input_process.daemon = True
+    user_input_process.start()
+
     cont_run = True
     while cont_run:
         try:
-            command = input("Command: ")
-            print("Given command: " + command + "\n")
-            commands = command.split()
-            verb = lookup_button(commands[0])
-            if verb == -2:
-                handle_exit()
 
-            if verb != -1:
-                motor_cmd_process = Process(target=motor_cmd, args=(master, verb, commands))
-                motor_cmd_process.start()
-            else:
-                print("Unknown command, list of available commands: \n")
-                print_cmd_list()
-                print("")
+            if not user_input_queue.empty():
+                command = user_input_queue.get()
+                user_input_queue.join()
+                # command = input("Command: ")
+                print("Given command: " + command + "\n")
+                commands = command.split()
+                verb = lookup_button(commands[0])
+                if verb == -2:
+                    handle_exit()
+
+                if verb != -1:
+                    motor_cmd_process = Process(target=motor_cmd, args=(master, verb, commands))
+                    motor_cmd_process.daemon = True
+                    motor_cmd_process.start()
+                else:
+                    print("Unknown command, list of available commands: \n")
+                    print_cmd_list()
+                    print("")
+
+                # restart user input thread
+                user_input_queue = Queue()
+                user_input_process = Process(target=handle_user_input, args=(user_input_queue,))
+                user_input_process.daemon = True
+                user_input_process.start()
 
             # update sensors
-            ping1, ping2 = update_sensors(q)
+            ping1, ping2 = update_sensors(qFromArduino)
             if ping1 != -100:
                 forward_ping = ping1
             if ping2 != -100:
@@ -71,22 +87,30 @@ def run(q, master):
 
 
 def update_sensors(q):
+
     ping1_val = -100
     ping2_val = -100
-    val = q.get()
-    if val[0] == 0:
-        ping1_val = val[1]
-    elif val[0] == 1:
-        ping2_val = val[1]
-
-    for i in range(q.qsize()):
+    if not q.empty():
         val = q.get()
         if val[0] == 0:
             ping1_val = val[1]
         elif val[0] == 1:
             ping2_val = val[1]
-    print("ping1: %f, ping2: %f" % (ping1_val, ping2_val))
+
+        for i in range(q.qsize()):
+            val = q.get()
+            if val[0] == 0:
+                ping1_val = val[1]
+            elif val[0] == 1:
+                ping2_val = val[1]
+        print("ping1: %f, ping2: %f" % (ping1_val, ping2_val))
     return ping1_val, ping2_val
+
+
+def handle_user_input(user_input_queue):
+    command = input("Command: ")
+    user_input_queue.put(command)
+
 
 def lookup_button(string_in):
     if string_in == "depth":
@@ -370,17 +394,15 @@ if __name__ == '__main__':
     qToArduino = Queue()
     qFromArduino = Queue()
 
+    # Create the connection
+    master = mavutil.mavlink_connection('udpin:0.0.0.0:15000')
+    # Wait a heartbeat before sending commands
+    master.wait_heartbeat()
+
     ser = serial.Serial('COM3', 115200, timeout=0)
 
-    # arduinoProcess = Process(target=arduino_comms, args=(qToArduino, qFromArduino, ser))
-    # arduinoProcess.start()
-    while True:
-        pass
-    # time.sleep(5)
-    # print("data return: ", end='')
-    # val = q.get()
-    # for i in range(q.qsize()):
-    #     val = q.get()
-    # print(val)
-    #
-    # main()
+    arduinoProcess = Process(target=arduino_comms, args=(qToArduino, qFromArduino, ser))
+    arduinoProcess.daemon = True
+    arduinoProcess.start()
+
+    run(master, qFromArduino, qToArduino)
