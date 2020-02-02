@@ -72,10 +72,10 @@ def main_loop(master, main_loop_queue, qFromArduino, qToArduino):
                     handle_exit()
 
                 if verb == 101:
-                    if commands[1] == 1:
-                        print(forward_ping)
-                    elif commands[1] == 2:
-                        print(down_ping)
+                    if commands[1] == '1':
+                        print("forward ping: " + str(forward_ping))
+                    elif commands[1] == '2':
+                        print("down ping: " + str(down_ping))
                 elif verb != -1:
                     motor_cmd_process = Process(target=motor_cmd, args=(master, verb, commands))
                     motor_cmd_process.daemon = True
