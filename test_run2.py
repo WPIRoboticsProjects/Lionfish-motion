@@ -28,18 +28,25 @@ def handler(signum, frame):
 
 def handle_exit():
     print("Exiting")
+    exit()
     
 
 def run(master, qFromArduino, qToArduino):
     main_loop_queue = Queue()
     main_loop_process = Process(target=main_loop, args=(master, main_loop_queue, qFromArduino, qToArduino,))
-    main_loop_process.daemon = True
+    #main_loop_process.daemon = True
     main_loop_process.start()
 
     cont_run = True
     while cont_run:
         command = input("Command: ")
         main_loop_queue.put(command)
+        
+        commands = command.split()
+        verb = lookup_button(commands[0])
+        if verb == -2:
+            handle_exit()
+        time.sleep(1)
 
 
 def main_loop(master, main_loop_queue, qFromArduino, qToArduino):
@@ -79,6 +86,7 @@ def main_loop(master, main_loop_queue, qFromArduino, qToArduino):
                 forward_ping = ping1
             if ping2 != -100:
                 down_ping = ping2
+            #print("forward: %f, down: %f" % (forward_ping,down_ping))
 
         except Exception as e:
             print("Incorrect command: " + str(e))
@@ -101,7 +109,7 @@ def update_sensors(q):
                 ping1_val = val[1]
             elif val[0] == 1:
                 ping2_val = val[1]
-        print("ping1: %f, ping2: %f" % (ping1_val, ping2_val))
+        #print("ping1: %f, ping2: %f" % (ping1_val, ping2_val))
     return ping1_val, ping2_val
 
 
@@ -348,13 +356,13 @@ def recv_from_arduino(ser):
 
 
 def arduino_comms(qToArduino, qFromArduino):
-    ser = serial.Serial("COM3", 115200, timeout=0)
+    ser = serial.Serial("/dev/serial/by-path/platform-70090000.xusb-usb-0:2.3:1.0", 115200, timeout=0)
 
     while True:
         if ser.inWaiting() > 0:
             try:
                 dataRecvd = recv_from_arduino(ser)
-                print("Reply Received  " + dataRecvd)
+                #print("Reply Received  " + dataRecvd)
                 process_arduino_data(dataRecvd, qFromArduino)
             except:
                 # print("cannot read")
@@ -363,14 +371,14 @@ def arduino_comms(qToArduino, qFromArduino):
 
 def process_arduino_data(message, qFromArduino):
     recvMessage = message.split()
-    messType = int(recvMessage[0])
-    messId = int(recvMessage[1])
-    messData = recvMessage[2]
-
+    messType = int(recvMessage[1])
+    messId = int(recvMessage[2])
+    messData = int(recvMessage[3])
+    #print("Type: " + str(messType) + ", id: " + str(messId) + ", data: " + str(messData))
     if messType == 0:
-        if messId == 0:
+        if messId == 1:
             qFromArduino.put((0, messData))
-        elif messId == 1:
+        elif messId == 2:
             qFromArduino.put((1, messData))
         # ping sensor update
         # qFromArduino # send received data to jetson
