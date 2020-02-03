@@ -72,14 +72,15 @@ def main_loop(master, main_loop_queue, qFromArduino, qToArduino):
                 if verb == -2:
                     handle_exit()
 
-                if verb == 101:
+                if verb == 101 or 18:
                     if commands[1] == '1':
                         print("forward ping: " + str(forward_ping))
                         commands[3] = int(forward_ping)
                         commands[4] = int(down_ping)
                     elif commands[1] == '2':
                         print("down ping: " + str(down_ping))
-                elif verb != -1:
+                
+                if verb != -1:
                     motor_cmd_process = Process(target=motor_cmd, args=(master, verb, commands))
                     motor_cmd_process.daemon = True
                     motor_cmd_process.start()
@@ -150,6 +151,8 @@ def lookup_button(string_in):
         return 16
     elif string_in == "square":
         return 17
+    elif string_in == "bottomHold":
+        return 18
     elif string_in == "hud":
         return 100
     elif string_in == "roomba":
@@ -208,6 +211,12 @@ def motor_cmd(master, verb, commands):
 
         turn_angle(master, 15, 90)      
         
+    elif verb == 18:
+        val = commands[1]
+        ping = commands[3]
+        target_distance = commands[2]
+        bottom_hold(master, val, target_distance, ping)
+
     elif verb == 100:
         print(get_message(master))
 
@@ -284,6 +293,17 @@ def depth(master, val, target_depth):
             curr_depth = float(get_message(master)['alt'])
     elif val == 0:
         write_pwm(master, 2, 0)
+
+def bottom_hold(master, val, target_distance, pingVal):
+    pingCorrected = pingVal/1000
+    output = (val * 5) + 1500
+
+    if (pingCorrected - target_distance) < 0:
+        output = (-val * 5) + 1500
+
+    while abs(pingCorrected - target_distance) > 0.2:
+        write_pwm(master, 2, output)
+        pingCorrected = float(get_message(master)['ping'])/1000
 
 def avoid_wall(master, ping):
     if ping < 7000 or ping == -100:
