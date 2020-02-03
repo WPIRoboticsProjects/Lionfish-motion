@@ -4,6 +4,7 @@ import time
 from sys import exit
 import serial
 import signal
+import random
 
 # Pwm channel pins
 # 0 - pitch
@@ -147,6 +148,8 @@ def lookup_button(string_in):
         return 16
     elif string_in == "square":
         return 17
+    elif strign_in == "roomba":
+        return 18
     elif string_in == "hud":
         return 100
     elif string_in == "ping":
@@ -205,6 +208,11 @@ def motor_cmd(master, verb, commands):
 
         turn_angle(master, 15, 90)
 
+    elif verb == 18:
+        # run roomba
+        time_to_drive = float(commands[1])
+        
+        
     elif verb == 100:
         print(get_message(master))
     else:
@@ -249,14 +257,18 @@ def depth(master, val, target_depth):
         curr_depth = float(get_message(master)['alt'])
         output = (val * 5) + 1500
         if (target_depth - curr_depth) < 0:
-            output = (-val * 5) + 1500
-
+            output = (-val * 5) + 1500   
+            
         while abs(target_depth - curr_depth) > 0.2:
             write_pwm(master, 2, output)
             curr_depth = float(get_message(master)['alt'])
     elif val == 0:
         write_pwm(master, 2, 0)
 
+def find_wall(master, time_to_drive):
+    if ping1_val < 7000:
+        
+            
 
 def button_press(master, verb):
     buttons = 1 << verb
@@ -333,13 +345,15 @@ def print_cmd_list():
     print("forward <0-100% throttle> <time in seconds> - drive forward for x seconds")
     print("reverse <0-100% throttle> <time in seconds> - drive reverse for x seconds")
     print("dive <0-100% throttle> <target depth (m)> - dive to given depth")
+    print("square - travel in a rectangle")
+    print("roomba - execute roomba search pattern")
     print("hud - print out the hud data")
     print("ping <ID> - return ping data from given ID, start at 1")
     print("square - run a rectangle")
     print("q - quit the program")
 
 
-# Adruino -------------------------------------------------------------------
+# Arduino -------------------------------------------------------------------
 
 
 def recv_from_arduino(ser):
