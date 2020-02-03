@@ -75,6 +75,8 @@ def main_loop(master, main_loop_queue, qFromArduino, qToArduino):
                 if verb == 101:
                     if commands[1] == '1':
                         print("forward ping: " + str(forward_ping))
+                        commands[3] = int(forward_ping)
+                        commands[4] = int(down_ping)
                     elif commands[1] == '2':
                         print("down ping: " + str(down_ping))
                 elif verb != -1:
@@ -148,11 +150,9 @@ def lookup_button(string_in):
         return 16
     elif string_in == "square":
         return 17
-    elif strign_in == "roomba":
-        return 18
     elif string_in == "hud":
         return 100
-    elif string_in == "ping":
+    elif string_in == "roomba":
         return 101
     elif string_in == "quit":
         return -2
@@ -206,15 +206,35 @@ def motor_cmd(master, verb, commands):
         clear_motors(master)
         time.sleep(1)
 
-        turn_angle(master, 15, 90)
-
-    elif verb == 18:
-        # run roomba
-        time_to_drive = float(commands[1])
-        
+        turn_angle(master, 15, 90)      
         
     elif verb == 100:
         print(get_message(master))
+
+    elif verb == 101:
+        roombaMode = "driving"
+        # run roomba
+        pingedSonar = float(commands[1])
+        time_to_drive = float(commands[2])
+
+
+        if pingedSonar == 1: #front sonar
+            tooClose = avoid_wall(master, commands[3])
+        else:
+            tooClose = False
+        
+        if tooClose:
+            if roombaMode == "driving":
+                roombaMode = "turning"
+            
+            turn_angle(master, 15, 10)
+            
+        else:
+            if roombaMode == "turning":
+                roombaMode = "driving"
+                turn_angle(master, 15, 20)
+
+            drive_forward(master, 50, time_to_drive)
     else:
         pass
 
@@ -265,8 +285,11 @@ def depth(master, val, target_depth):
     elif val == 0:
         write_pwm(master, 2, 0)
 
-def find_wall(master, time_to_drive):
-    if ping1_val < 7000:
+def avoid_wall(master, ping):
+    if ping < 7000 or ping == -100:
+        return True
+    else:
+        return False
         
             
 
@@ -316,7 +339,6 @@ def continue_turn(org_heading, curr_heading, rel_angle):
         return False
     else:
         return True
-
 
 def get_message(master):
     while True:
