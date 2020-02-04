@@ -51,13 +51,18 @@ def run(master, qFromArduino, qToArduino):
 
 
 def main_loop(master, main_loop_queue, qFromArduino, qToArduino):
+
+    cmd_queue = Queue()
+
     forward_ping = -100
     down_ping = -100
     ping1, ping2 = update_sensors(qFromArduino)
     if ping1 != -100:
         forward_ping = ping1
+        cmd_queue.put((0, forward_ping))
     if ping2 != -100:
         down_ping = ping2
+        cmd_queue.put((1, down_ping))
 
     cont_run = True
     while cont_run:
@@ -65,23 +70,20 @@ def main_loop(master, main_loop_queue, qFromArduino, qToArduino):
 
             if not main_loop_queue.empty():
                 command = main_loop_queue.get()
-                # command = input("Command: ")
                 print("Given command: " + command + "\n")
                 commands = command.split()
                 verb = lookup_button(commands[0])
                 if verb == -2:
                     handle_exit()
 
-                if verb == 101 or 18:
+                if verb == 101:
                     if commands[1] == '1':
                         print("forward ping: " + str(forward_ping))
-                        commands[3] = int(forward_ping)
-                        commands[4] = int(down_ping)
                     elif commands[1] == '2':
                         print("down ping: " + str(down_ping))
                 
                 if verb != -1:
-                    motor_cmd_process = Process(target=motor_cmd, args=(master, verb, commands))
+                    motor_cmd_process = Process(target=motor_cmd, args=(master, verb, commands, cmd_queue))
                     motor_cmd_process.daemon = True
                     motor_cmd_process.start()
                 else:
@@ -95,7 +97,6 @@ def main_loop(master, main_loop_queue, qFromArduino, qToArduino):
                 forward_ping = ping1
             if ping2 != -100:
                 down_ping = ping2
-            #print("forward: %f, down: %f" % (forward_ping,down_ping))
 
         except Exception as e:
             print("Incorrect command: " + str(e))
@@ -118,7 +119,6 @@ def update_sensors(q):
                 ping1_val = val[1]
             elif val[0] == 1:
                 ping2_val = val[1]
-        #print("ping1: %f, ping2: %f" % (ping1_val, ping2_val))
     return ping1_val, ping2_val
 
 
@@ -153,9 +153,11 @@ def lookup_button(string_in):
         return 17
     elif string_in == "bottomHold":
         return 18
+    elif string_in == "roomba":
+        return 19
     elif string_in == "hud":
         return 100
-    elif string_in == "roomba":
+    elif string_in == "ping":
         return 101
     elif string_in == "quit":
         return -2
@@ -165,7 +167,7 @@ def lookup_button(string_in):
         return -1
 
 
-def motor_cmd(master, verb, commands):
+def motor_cmd(master, verb, commands, cmd_queue):
     if verb < 13:
         button_press(master, verb)
     elif verb == 13:
@@ -209,41 +211,22 @@ def motor_cmd(master, verb, commands):
         clear_motors(master)
         time.sleep(1)
 
-        turn_angle(master, 15, 90)      
-        
+        turn_angle(master, 15, 90)
     elif verb == 18:
+        # TODO bottom hold
         val = commands[1]
         ping = commands[3]
         target_distance = commands[2]
         bottom_hold(master, val, target_distance, ping)
+    elif verb == 19:
+        # run roomba
+        throttle = commands[1]
+        time_to_run = commands[2]
+        roomba(master, time_to_run, throttle, cmd_queue)
 
     elif verb == 100:
+        # print hud
         print(get_message(master))
-
-    elif verb == 101:
-        roombaMode = "driving"
-        # run roomba
-        pingedSonar = float(commands[1])
-        time_to_drive = float(commands[2])
-
-
-        if pingedSonar == 1: #front sonar
-            tooClose = avoid_wall(master, commands[3])
-        else:
-            tooClose = False
-        
-        if tooClose:
-            if roombaMode == "driving":
-                roombaMode = "turning"
-            
-            turn_angle(master, 15, 10)
-            
-        else:
-            if roombaMode == "turning":
-                roombaMode = "driving"
-                turn_angle(master, 15, 20)
-
-            drive_forward(master, 50, time_to_drive)
     else:
         pass
 
@@ -295,18 +278,39 @@ def depth(master, val, target_depth):
         write_pwm(master, 2, 0)
 
 def bottom_hold(master, val, target_distance, pingVal):
-    pingCorrected = pingVal/1000
-    output = (val * 5) + 1500
+    pass
+    # pingCorrected = pingVal/1000
+    # output = (val * 5) + 1500
+    #
+    # if (pingCorrected - target_distance) < 0:
+    #     output = (-val * 5) + 1500
+    #
+    # while abs(pingCorrected - target_distance) > 0.2:
+    #     write_pwm(master, 2, output)
+    #     pingCorrected = float(get_message(master)['ping'])/1000
 
-    if (pingCorrected - target_distance) < 0:
-        output = (-val * 5) + 1500
+def roomba(master, time, throttle, cmd_queue):
+    output = (throttle * 5) + 1500
+    end_time = time.time() + time
+    while time.time() <= end_time:
+        ping1, ping2 = update_sensors(cmd_queue)
+        if object_forward(ping1):
+            write_pwm(master, 4, 1500)
+            time.sleep(0.5)
+            turn_angle(master, 15, 95)
+        else:
+            write_pwm(master, 4, output)
 
-    while abs(pingCorrected - target_distance) > 0.2:
-        write_pwm(master, 2, output)
-        pingCorrected = float(get_message(master)['ping'])/1000
+    clear_motors(master)
 
 def avoid_wall(master, ping):
     if ping < 7000 or ping == -100:
+        return True
+    else:
+        return False
+
+def object_forward(ping):
+    if ping < 7000:
         return True
     else:
         return False
@@ -388,7 +392,7 @@ def print_cmd_list():
     print("reverse <0-100% throttle> <time in seconds> - drive reverse for x seconds")
     print("dive <0-100% throttle> <target depth (m)> - dive to given depth")
     print("square - travel in a rectangle")
-    print("roomba - execute roomba search pattern")
+    print("roomba <0-100% throttle> <time in seconds> - execute roomba search pattern for a given time")
     print("hud - print out the hud data")
     print("ping <ID> - return ping data from given ID, start at 1")
     print("square - run a rectangle")
