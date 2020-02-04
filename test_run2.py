@@ -18,6 +18,8 @@ import random
 # 8 - lights 1 level
 
 TURN_BUFFER = 2
+PING_FORWARD_STOP = 7000
+PING_EXPIRE_TIME = 3 # seconds
 
 startMarker = 60
 endMarker = 62
@@ -55,14 +57,20 @@ def main_loop(master, main_loop_queue, qFromArduino, qToArduino):
     cmd_queue = Queue()
 
     forward_ping = -100
+    forward_ping_time = 0
     down_ping = -100
+    down_ping_time = 0
     ping1, ping2 = update_sensors(qFromArduino)
     if ping1 != -100:
         forward_ping = ping1
-        cmd_queue.put((0, forward_ping))
+        forward_ping_time = time.time()
+        # sensor 0, data, time taken
+        cmd_queue.put((0, forward_ping, forward_ping_time))
     if ping2 != -100:
         down_ping = ping2
-        cmd_queue.put((1, down_ping))
+        down_ping_time = time.time()
+        # sensor 0, data, time taken
+        cmd_queue.put((1, down_ping, down_ping_time))
 
     cont_run = True
     while cont_run:
@@ -292,8 +300,14 @@ def bottom_hold(master, val, target_distance, pingVal):
 def roomba(master, time, throttle, cmd_queue):
     output = (throttle * 5) + 1500
     end_time = time.time() + time
+
+    ping1_ret, ping1_time_ret, ping2_ret, ping2_time_ret = check_sensors(cmd_queue)
+    ping1 = ping1_ret
+    ping2 = ping2_ret
+
+
     while time.time() <= end_time:
-        ping1, ping2 = update_sensors(cmd_queue)
+        ping1, ping1_time, ping2, ping2_time = check_sensors(cmd_queue)
         if object_forward(ping1):
             write_pwm(master, 4, 1500)
             time.sleep(0.5)
@@ -303,18 +317,42 @@ def roomba(master, time, throttle, cmd_queue):
 
     clear_motors(master)
 
-def avoid_wall(master, ping):
-    if ping < 7000 or ping == -100:
+def check_sensors(q):
+
+    ping1_val = -100
+    ping1_time = 0
+    ping2_val = -100
+    ping2_time = 0
+    if not q.empty():
+        val = q.get()
+        if val[0] == 0:
+            ping1_val = val[1]
+            ping1_time = val[2]
+        elif val[0] == 1:
+            ping2_val = val[1]
+            ping2_time = val[2]
+
+        for i in range(q.qsize()):
+            val = q.get()
+            if val[0] == 0:
+                ping1_val = val[1]
+                ping1_time = val[2]
+            elif val[0] == 1:
+                ping2_val = val[1]
+                ping2_time = val[2]
+    return ping1_val, ping1_time, ping2_val, ping2_time
+
+def object_forward(ping):
+    if (ping < PING_FORWARD_STOP) and ping != -100:
         return True
     else:
         return False
 
-def object_forward(ping):
-    if ping < 7000:
+def ping_expire(ping_time):
+    if (time.time() - ping_time) > PING_EXPIRE_TIME:
         return True
     else:
         return False
-        
             
 
 def button_press(master, verb):
