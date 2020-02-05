@@ -58,16 +58,20 @@ def main_loop(master, main_loop_queue, qFromArduino, qToArduino):
 
     forward_ping = -100
     forward_ping_time = 0
+    forward_ping_conf = 0
     down_ping = -100
     down_ping_time = 0
-    ping1, ping2 = update_sensors(qFromArduino)
+    down_ping_conf = 0
+    ping1, ping2, ping1_conf, ping2_conf = update_sensors(qFromArduino)
     if ping1 != -100:
         forward_ping = ping1
+        forward_ping_conf = ping1_conf
         forward_ping_time = time.time()
         # sensor 0, data, time taken
         cmd_queue.put((0, forward_ping, forward_ping_time))
     if ping2 != -100:
         down_ping = ping2
+        down_ping_conf = ping2_conf
         down_ping_time = time.time()
         # sensor 0, data, time taken
         cmd_queue.put((1, down_ping, down_ping_time))
@@ -86,9 +90,9 @@ def main_loop(master, main_loop_queue, qFromArduino, qToArduino):
 
                 if verb == 101:
                     if commands[1] == '1':
-                        print("forward ping: " + str(forward_ping))
+                        print("forward ping: " + str(forward_ping) + ", conf: " + str(forward_ping_conf))
                     elif commands[1] == '2':
-                        print("down ping: " + str(down_ping))
+                        print("down ping: " + str(down_ping) + ", conf: " + str(down_ping_conf))
                 
                 if verb != -1:
                     motor_cmd_process = Process(target=motor_cmd, args=(master, verb, commands, cmd_queue))
@@ -100,11 +104,13 @@ def main_loop(master, main_loop_queue, qFromArduino, qToArduino):
                     print("")
 
             # update sensors
-            ping1, ping2 = update_sensors(qFromArduino)
+            ping1, ping2, ping1_conf, ping2_conf = update_sensors(qFromArduino)
             if ping1 != -100:
                 forward_ping = ping1
+                forward_ping_conf = ping1_conf
             if ping2 != -100:
                 down_ping = ping2
+                down_ping_conf = ping2_conf
 
         except Exception as e:
             print("Incorrect command: " + str(e))
@@ -113,21 +119,27 @@ def main_loop(master, main_loop_queue, qFromArduino, qToArduino):
 def update_sensors(q):
 
     ping1_val = -100
+    ping1_conf = 0
     ping2_val = -100
+    ping2_conf = 0
     if not q.empty():
         val = q.get()
         if val[0] == 0:
             ping1_val = val[1]
+            ping1_conf = val[2]
         elif val[0] == 1:
             ping2_val = val[1]
+            ping2_conf = val[2]
 
         for i in range(q.qsize()):
             val = q.get()
             if val[0] == 0:
                 ping1_val = val[1]
+                ping1_conf = val[2]
             elif val[0] == 1:
                 ping2_val = val[1]
-    return ping1_val, ping2_val
+                ping2_conf = val[2]
+    return ping1_val, ping2_val, ping1_conf, ping2_conf
 
 
 def lookup_button(string_in):
@@ -480,12 +492,13 @@ def process_arduino_data(message, qFromArduino):
     messType = int(recvMessage[1])
     messId = int(recvMessage[2])
     messData = int(recvMessage[3])
+    confData = int(recvMessage[3])
     #print("Type: " + str(messType) + ", id: " + str(messId) + ", data: " + str(messData))
     if messType == 0:
         if messId == 1:
-            qFromArduino.put((0, messData))
+            qFromArduino.put((0, messData, confData))
         elif messId == 2:
-            qFromArduino.put((1, messData))
+            qFromArduino.put((1, messData, confData))
         # ping sensor update
         # qFromArduino # send received data to jetson
     elif messType == 1:
