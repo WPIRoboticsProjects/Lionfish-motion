@@ -91,9 +91,11 @@ def main_loop(master, main_loop_queue, qFromArduino, qToArduino):
 
                 if verb == 101:
                     if commands[1] == '1':
-                        print("forward ping: " + str(forward_ping) + ", conf: " + str(forward_ping_conf))
+                        print("forward ping: " + str(forward_ping) + " mm,   conf: " + str(forward_ping_conf))
+                        print("forward ping: " + str((forward_ping/25.4)) + " inches,   conf: " + str(forward_ping_conf))
                     elif commands[1] == '2':
-                        print("down ping: " + str(down_ping) + ", conf: " + str(down_ping_conf))
+                        print("down ping: " + str(down_ping) + " mm,   conf: " + str(down_ping_conf))
+                        print("forward ping: " + str((down_ping / 25.4)) + " inches,   conf: " + str(down_ping_conf))
                 
                 if verb != -1:
                     motor_cmd_process = Process(target=motor_cmd, args=(master, verb, commands, cmd_queue))
@@ -243,8 +245,8 @@ def motor_cmd(master, verb, commands, cmd_queue):
         bottom_hold(master, val, target_distance, ping)
     elif verb == 19:
         # run roomba
-        throttle = commands[1]
-        time_to_run = commands[2]
+        throttle = int(commands[1])
+        time_to_run = int(commands[2])
         roomba(master, time_to_run, throttle, cmd_queue)
 
     elif verb == 100:
@@ -312,9 +314,9 @@ def bottom_hold(master, val, target_distance, pingVal):
     #     write_pwm(master, 2, output)
     #     pingCorrected = float(get_message(master)['ping'])/1000
 
-def roomba(master, time, throttle, cmd_queue):
+def roomba(master, in_time, throttle, cmd_queue):
     output = (throttle * 5) + 1500
-    end_time = time.time() + time
+    end_time = time.time() + in_time
 
     ping1_ret, ping1_time_ret, ping1_conf, ping2_ret, ping2_time_ret, ping2_conf = check_sensors(cmd_queue)
     ping1 = ping1_ret
