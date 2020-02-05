@@ -20,6 +20,7 @@ import random
 TURN_BUFFER = 2
 PING_FORWARD_STOP = 7000
 PING_EXPIRE_TIME = 3 # seconds
+PING_CONF = 60
 
 startMarker = 60
 endMarker = 62
@@ -68,13 +69,13 @@ def main_loop(master, main_loop_queue, qFromArduino, qToArduino):
         forward_ping_conf = ping1_conf
         forward_ping_time = time.time()
         # sensor 0, data, time taken
-        cmd_queue.put((0, forward_ping, forward_ping_time))
+        cmd_queue.put((0, forward_ping, forward_ping_time, ping1_conf))
     if ping2 != -100:
         down_ping = ping2
         down_ping_conf = ping2_conf
         down_ping_time = time.time()
         # sensor 0, data, time taken
-        cmd_queue.put((1, down_ping, down_ping_time))
+        cmd_queue.put((1, down_ping, down_ping_time, ping2_conf))
 
     cont_run = True
     while cont_run:
@@ -313,14 +314,14 @@ def roomba(master, time, throttle, cmd_queue):
     output = (throttle * 5) + 1500
     end_time = time.time() + time
 
-    ping1_ret, ping1_time_ret, ping2_ret, ping2_time_ret = check_sensors(cmd_queue)
+    ping1_ret, ping1_time_ret, ping1_conf, ping2_ret, ping2_time_ret , ping2_conf = check_sensors(cmd_queue)
     ping1 = ping1_ret
     ping2 = ping2_ret
 
 
     while time.time() <= end_time:
-        ping1, ping1_time, ping2, ping2_time = check_sensors(cmd_queue)
-        if object_forward(ping1):
+        ping1, ping1_time, ping1_conf, ping2, ping2_time, ping2_conf = check_sensors(cmd_queue)
+        if object_forward(ping1) and ping_conf(ping1_conf):
             write_pwm(master, 4, 1500)
             time.sleep(0.5)
             turn_angle(master, 15, 95)
@@ -333,26 +334,32 @@ def check_sensors(q):
 
     ping1_val = -100
     ping1_time = 0
+    ping1_conf = 0
     ping2_val = -100
     ping2_time = 0
+    ping2_conf = 0
     if not q.empty():
         val = q.get()
         if val[0] == 0:
             ping1_val = val[1]
             ping1_time = val[2]
+            ping1_conf = val[3]
         elif val[0] == 1:
             ping2_val = val[1]
             ping2_time = val[2]
+            ping2_conf = val[3]
 
         for i in range(q.qsize()):
             val = q.get()
             if val[0] == 0:
                 ping1_val = val[1]
                 ping1_time = val[2]
+                ping1_conf = val[3]
             elif val[0] == 1:
                 ping2_val = val[1]
                 ping2_time = val[2]
-    return ping1_val, ping1_time, ping2_val, ping2_time
+                ping2_conf = val[3]
+    return ping1_val, ping1_time, ping1_conf, ping2_val, ping2_time, ping2_conf
 
 def object_forward(ping):
     if (ping < PING_FORWARD_STOP) and ping != -100:
@@ -365,7 +372,12 @@ def ping_expire(ping_time):
         return True
     else:
         return False
-            
+
+def ping_conf(conf):
+    if conf > PING_CONF:
+        return True
+    else:
+        return False
 
 def button_press(master, verb):
     buttons = 1 << verb
