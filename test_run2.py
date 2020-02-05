@@ -162,9 +162,9 @@ def lookup_button(string_in):
         return 9
     elif string_in == "hold":
         return 10
-    elif string_in == "camdown":
-        return 11
     elif string_in == "camup":
+        return 11
+    elif string_in == "camdown":
         return 12
     elif string_in == "yaw":
         return 13
@@ -489,7 +489,7 @@ def recv_from_arduino(ser):
     return (ck)
 
 
-def arduino_comms(qToArduino, qFromArduino):
+def arduino_comms(qToArduino, qFromArduino, master_send):
     ser = serial.Serial("/dev/serial/by-path/platform-70090000.xusb-usb-0:2.3:1.0", 115200, timeout=0)
 
     while True:
@@ -528,6 +528,18 @@ def process_arduino_data(message, qFromArduino):
 #     else:
 #         print("incorrect data type sent to spear")
 
+def wait_conn(master):
+    msg = None
+    while not msg:
+        master.mav.ping_send(
+            time.time(), # Unix time
+            0, # Ping number
+            0, # Request ping of all systems
+            0 # Request ping of all components
+        )
+        msg = master.recv_match()
+        time.sleep(0.5)
+
 if __name__ == '__main__':
     signal.signal(signal.SIGINT, handler)
     qToArduino = Queue()
@@ -536,9 +548,20 @@ if __name__ == '__main__':
     # Create the connection
     master = mavutil.mavlink_connection('udpin:0.0.0.0:15000')
     # Wait a heartbeat before sending commands
-    master.wait_heartbeat()
+    # master.wait_heartbeat()
+    print("mavlink in connection established")
 
-    arduinoProcess = Process(target=arduino_comms, args=(qToArduino, qFromArduino,))
+    master_send = mavutil.mavlink_connection('udpout:0.0.0.0:9000') # TODO need to add port out in config and change port
+    # wait_conn(master_send)
+    print("mavlink out connection established")
+
+    # https://mavlink.io/en/messages/common.html#NAMED_VALUE_INT
+    # https://mavlink.io/en/mavgen_python/
+
+    master.mav.named_value_int_send(name="intPingDown", value=10, time_boot_ms=int(time.time()*1000))
+    # master.mav.named_value_int_send(time.time(), "intPingForward", 20, 0)
+
+    arduinoProcess = Process(target=arduino_comms, args=(qToArduino, qFromArduino, master_send,))
     arduinoProcess.daemon = True
     arduinoProcess.start()
 
