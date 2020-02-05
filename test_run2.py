@@ -492,7 +492,7 @@ def process_arduino_data(message, qFromArduino):
     messType = int(recvMessage[1])
     messId = int(recvMessage[2])
     messData = int(recvMessage[3])
-    confData = int(recvMessage[3])
+    confData = int(recvMessage[4])
     #print("Type: " + str(messType) + ", id: " + str(messId) + ", data: " + str(messData))
     if messType == 0:
         if messId == 1:
