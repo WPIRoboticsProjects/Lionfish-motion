@@ -18,7 +18,7 @@ import random
 # 8 - lights 1 level
 
 TURN_BUFFER = 2
-PING_FORWARD_STOP = 7000
+PING_FORWARD_STOP = 2000
 PING_EXPIRE_TIME = 3 # seconds
 PING_CONF = 60
 
@@ -63,7 +63,7 @@ def main_loop(master, main_loop_queue, qFromArduino, qToArduino):
     down_ping = -100
     down_ping_time = 0
     down_ping_conf = 0
-    ping1, ping2, ping1_conf, ping2_conf = update_sensors(qFromArduino)
+    ping1, ping1_conf, ping2, ping2_conf = update_sensors(qFromArduino)
     if ping1 != -100:
         forward_ping = ping1
         forward_ping_conf = ping1_conf
@@ -105,13 +105,15 @@ def main_loop(master, main_loop_queue, qFromArduino, qToArduino):
                     print("")
 
             # update sensors
-            ping1, ping2, ping1_conf, ping2_conf = update_sensors(qFromArduino)
+            ping1, ping1_conf, ping2, ping2_conf = update_sensors(qFromArduino)
             if ping1 != -100:
                 forward_ping = ping1
                 forward_ping_conf = ping1_conf
+                cmd_queue.put((0, forward_ping, forward_ping_time, ping1_conf))
             if ping2 != -100:
                 down_ping = ping2
                 down_ping_conf = ping2_conf
+                cmd_queue.put((1, down_ping, down_ping_time, ping2_conf))
 
         except Exception as e:
             print("Incorrect command: " + str(e))
@@ -125,22 +127,22 @@ def update_sensors(q):
     ping2_conf = 0
     if not q.empty():
         val = q.get()
-        if val[0] == 0:
+        if val[0] == 1:
             ping1_val = val[1]
             ping1_conf = val[2]
-        elif val[0] == 1:
+        elif val[0] == 0:
             ping2_val = val[1]
             ping2_conf = val[2]
 
         for i in range(q.qsize()):
             val = q.get()
-            if val[0] == 0:
+            if val[0] == 1:
                 ping1_val = val[1]
                 ping1_conf = val[2]
-            elif val[0] == 1:
+            elif val[0] == 0:
                 ping2_val = val[1]
                 ping2_conf = val[2]
-    return ping1_val, ping2_val, ping1_conf, ping2_conf
+    return ping1_val, ping1_conf, ping2_val, ping2_conf
 
 
 def lookup_button(string_in):
@@ -314,7 +316,7 @@ def roomba(master, time, throttle, cmd_queue):
     output = (throttle * 5) + 1500
     end_time = time.time() + time
 
-    ping1_ret, ping1_time_ret, ping1_conf, ping2_ret, ping2_time_ret , ping2_conf = check_sensors(cmd_queue)
+    ping1_ret, ping1_time_ret, ping1_conf, ping2_ret, ping2_time_ret, ping2_conf = check_sensors(cmd_queue)
     ping1 = ping1_ret
     ping2 = ping2_ret
 
