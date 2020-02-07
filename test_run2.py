@@ -5,6 +5,7 @@ from sys import exit
 import serial
 import signal
 import random
+import math
 
 # Pwm channel pins
 # 0 - pitch
@@ -180,6 +181,8 @@ def lookup_button(string_in):
         return 18
     elif string_in == "roomba":
         return 19
+    elif string_in == "xyzNav":
+        return 20
     elif string_in == "hud":
         return 100
     elif string_in == "ping":
@@ -237,17 +240,25 @@ def motor_cmd(master, verb, commands, cmd_queue):
         time.sleep(1)
 
         turn_angle(master, 15, 90)
+    
     elif verb == 18:
-        # TODO bottom hold
-        val = commands[1]
-        ping = commands[3]
-        target_distance = commands[2]
-        bottom_hold(master, val, target_distance, ping)
+        #bottom hold
+        in_time = commands[1]
+        val = commands[2]
+        target_distance = commands[3]
+        bottom_hold(master, in_time, val, target_distance, cmd_queue)
+    
     elif verb == 19:
         # run roomba
         throttle = int(commands[1])
         time_to_run = int(commands[2])
         roomba(master, time_to_run, throttle, cmd_queue)
+    
+    elif verb == 20:
+        #xyz Navigation
+        in_time = int(commands[1])
+        throttle = int(commands[2])
+        xyzNav(master, in_time, throttle, cmd_queue)
 
     elif verb == 100:
         # print hud
@@ -302,17 +313,27 @@ def depth(master, val, target_depth):
     elif val == 0:
         write_pwm(master, 2, 0)
 
-def bottom_hold(master, val, target_distance, pingVal):
-    pass
-    # pingCorrected = pingVal/1000
-    # output = (val * 5) + 1500
-    #
-    # if (pingCorrected - target_distance) < 0:
-    #     output = (-val * 5) + 1500
-    #
-    # while abs(pingCorrected - target_distance) > 0.2:
-    #     write_pwm(master, 2, output)
-    #     pingCorrected = float(get_message(master)['ping'])/1000
+def bottom_hold(master, in_time, val, target_distance, cmd_queue):
+    end_time = time.time() + in_time
+    
+    ping1_ret, ping1_time_ret, ping1_conf, ping2_ret, ping2_time_ret, ping2_conf = check_sensors(cmd_queue)
+    ping1 = ping1_ret
+    ping2 = ping2_ret/1000    
+    curr_depth = float(get_message(master)['alt'])
+
+    while time.time() <= end_time:
+        ping1_ret, ping1_time_ret, ping1_conf, ping2_ret, ping2_time_ret, ping2_conf = check_sensors(cmd_queue)
+        ping1 = ping1_ret
+        ping2 = ping2_ret/1000    
+        curr_depth = float(get_message(master)['alt'])
+
+        if abs(ping2 - target_distance) > 0.2:
+            if ping2 > target_distance: 
+                desired_depth = curr_depth - ping2 - target_distance
+            else:
+                desired_depth = curr_depth + (target_distance - ping2)
+                
+            depth(master, val, desired_depth)
 
 def roomba(master, in_time, throttle, cmd_queue):
     output = (throttle * 5) + 1500
@@ -333,6 +354,59 @@ def roomba(master, in_time, throttle, cmd_queue):
             write_pwm(master, 4, output)
 
     clear_motors(master)
+
+def xyzNav(master, in_time, throttle, cmd_queue):
+    end_time = time.time() + in_time
+
+    relative_x, relative_y, relative_z = check_identification(cmd_queue)
+
+    while time.time() <= end_time:
+        #update relative data
+        relative_x, relative_y, relative_z = check_identification(cmd_queue)
+
+        #dive to be on same z axis
+        curr_depth = float(get_message(master)['alt'])
+        depth_of_point = curr_depth + relative_z
+        depth(master, 40, depth_of_point)
+
+        #turn to have the point straight ahead
+        tan_in_radians = math.tanh((relative_y/relative_x))
+        angle_to_point = math.degrees(tan_in_radians)
+        turn_angle(master, 15, angle_to_point)
+        time.sleep(0.25)
+        
+        #move towards the point
+        distance_to_point = (math.sqrt(relative_x*relative_x + relative_y*relative_y))/1000 #distance from mm to m
+        if distance_to_point >= 8:
+            closing_velocity = (50*5) + 1500
+        elif distance_to_point >= 1 and distance_to_point < 8:
+            closing_velocity = (distance_to_point * 3) + 1550 #16% @ 1m all the way to 60% at 8m
+        else:
+            closing_velocity = (15*5) + 1500
+
+        write_pwm(master, 4, closing_velocity)
+        time.sleep(0.5)
+            
+
+    clear_motors(master)
+
+def check_identification(q):
+    nav_x = -100
+    nav_y = -100
+    nav_z = -100
+    if not q.empty():
+        val = q.get()
+        if val[0] == 2:
+            nav_X = val[1]
+            nav_y = val[2]
+            nav_z = val[3]
+        for i in range(q.qsize()):
+            val = q.get()
+            if val[0] == 2:
+                nav_X = val[1]
+                nav_y = val[2]
+                nav_z = val[3]
+    return nav_x, nav_y, nav_z
 
 def check_sensors(q):
 
