@@ -243,10 +243,10 @@ def motor_cmd(master, verb, commands, cmd_queue):
     
     elif verb == 18:
         #bottom hold
-        in_time = commands[1]
-        val = commands[2]
-        target_distance = commands[3]
-        bottom_hold(master, in_time, val, target_distance, cmd_queue)
+        in_time = int(commands[1])
+        throttle = int(commands[2])
+        target_distance = float(commands[3])
+        bottom_hold(master, in_time, throttle, target_distance, cmd_queue)
     
     elif verb == 19:
         # run roomba
@@ -258,7 +258,10 @@ def motor_cmd(master, verb, commands, cmd_queue):
         #xyz Navigation
         in_time = int(commands[1])
         throttle = int(commands[2])
-        xyzNav(master, in_time, throttle, cmd_queue)
+        x = int(commands[3])
+        y = int(commands[4])
+        z = int(commands[5])
+        xyzNav(master, in_time, throttle, x, y, z)
 
     elif verb == 100:
         # print hud
@@ -313,27 +316,25 @@ def depth(master, val, target_depth):
     elif val == 0:
         write_pwm(master, 2, 0)
 
-def bottom_hold(master, in_time, val, target_distance, cmd_queue):
+def bottom_hold(master, in_time, throttle, target_distance, cmd_queue):
     end_time = time.time() + in_time
     
     ping1_ret, ping1_time_ret, ping1_conf, ping2_ret, ping2_time_ret, ping2_conf = check_sensors(cmd_queue)
-    ping1 = ping1_ret
     ping2 = ping2_ret/1000    
     curr_depth = float(get_message(master)['alt'])
 
     while time.time() <= end_time:
         ping1_ret, ping1_time_ret, ping1_conf, ping2_ret, ping2_time_ret, ping2_conf = check_sensors(cmd_queue)
-        ping1 = ping1_ret
         ping2 = ping2_ret/1000    
         curr_depth = float(get_message(master)['alt'])
 
         if abs(ping2 - target_distance) > 0.2:
             if ping2 > target_distance: 
-                desired_depth = curr_depth - ping2 - target_distance
+                desired_depth = curr_depth - ping2 + target_distance
             else:
                 desired_depth = curr_depth + (target_distance - ping2)
                 
-            depth(master, val, desired_depth)
+            depth(master, throttle, desired_depth)
 
 def roomba(master, in_time, throttle, cmd_queue):
     output = (throttle * 5) + 1500
@@ -355,14 +356,16 @@ def roomba(master, in_time, throttle, cmd_queue):
 
     clear_motors(master)
 
-def xyzNav(master, in_time, throttle, cmd_queue):
+def xyzNav(master, in_time, throttle, relX, relY, relZ):
     end_time = time.time() + in_time
 
-    relative_x, relative_y, relative_z = check_identification(cmd_queue)
+    relative_x = relX
+    relative_y = relY 
+    relative_z = relZ
 
     while time.time() <= end_time:
         #update relative data
-        relative_x, relative_y, relative_z = check_identification(cmd_queue)
+        #relative_x, relative_y, relative_z = check_identification(cmd_queue)
 
         #dive to be on same z axis
         curr_depth = float(get_message(master)['alt'])
@@ -533,6 +536,8 @@ def print_cmd_list():
     print("dive <0-100% throttle> <target depth (m)> - dive to given depth")
     print("square - travel in a rectangle")
     print("roomba <0-100% throttle> <time in seconds> - execute roomba search pattern for a given time")
+    print("xyzNav <time in seconds> <0-100% throttle> <Relative X> <Relative Y> <Relative Z>- Move to a relative XYZ position")
+    print("bottomHold <time in seconds> <0-100% throttle> <Distance from bottom(M)>")
     print("hud - print out the hud data")
     print("ping <ID> - return ping data from given ID, start at 1")
     print("square - run a rectangle")
