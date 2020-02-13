@@ -359,9 +359,11 @@ def roomba(master, in_time, throttle, cmd_queue):
 def xyzNav(master, in_time, throttle, relX, relY, relZ):
     end_time = time.time() + in_time
 
-    relative_x = relX
-    relative_y = relY 
-    relative_z = relZ
+    relative_x = relX #only for testing
+    relative_y = relY #
+    relative_z = relZ #
+
+    #relative_x, relative_y, relative_z = check_identification(cmd_queue)
 
     while time.time() <= end_time:
         #update relative data
