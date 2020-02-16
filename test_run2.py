@@ -633,14 +633,14 @@ def process_arduino_data(message, qFromArduino):
         pass
         # spear move update
     elif messType == 2:#BATTERY 
-	if messId == 1:#VOLTAGE
+        if messId == 1:#VOLTAGE
             qFromArduino.put((2, messData, confData))
         elif messId == 2:#CURRENT
             qFromArduino.put((3, messData, confData))
     elif messType == 3:#leak
-	print("**************SOS - LEAK DETECTED**************")
+        print("**************SOS - LEAK DETECTED**************")
         qFromArduino.put((4, messData, confData))
-	print("**************SOS - LEAK DETECTED**************")
+        print("**************SOS - LEAK DETECTED**************")
 
 
 # def actuate_spear(send_input):
