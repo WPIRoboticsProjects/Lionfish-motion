@@ -65,6 +65,9 @@ def main_loop(master, main_loop_queue, qFromArduino, qToArduino):
     down_ping_time = 0
     down_ping_conf = 0
     ping1, ping1_conf, ping2, ping2_conf = update_sensors(qFromArduino)
+    if check_lifeSupport(qFromArduino):
+        #kill processes and go to surface	
+
     if ping1 != -100:
         forward_ping = ping1
         forward_ping_conf = ping1_conf
@@ -118,6 +121,9 @@ def main_loop(master, main_loop_queue, qFromArduino, qToArduino):
                 down_ping_conf = ping2_conf
                 cmd_queue.put((1, down_ping, down_ping_time, ping2_conf))
 
+            if check_lifeSupport(qFromArduino):
+                #kill processes and go to surface
+
         except Exception as e:
             print("Incorrect command: " + str(e))
             exit()
@@ -147,6 +153,28 @@ def update_sensors(q):
                 ping2_conf = val[2]
     return ping1_val, ping1_conf, ping2_val, ping2_conf
 
+def check_lifeSupport(q):
+    battLow = False
+    leakDetected = False
+
+    if not q.empty():
+        val = q.get()
+        if val[0] == 2:
+            if val[1] > 12.2:
+                print("Low Battery: " + val[1])
+            else:
+                battLow = True
+        elif val[0] == 3:
+            leakDetected = True
+
+        for i in range(q.qsize()):
+            val = q.get()
+           if val[0] == 2:
+               battLow = True
+           elif val[0] == 3:
+               leakDetected = True
+  
+    return leakDetected or battLow
 
 def lookup_button(string_in):
     if string_in == "depth":
@@ -601,6 +629,15 @@ def process_arduino_data(message, qFromArduino):
     elif messType == 1:
         pass
         # spear move update
+    elif messType == 2:#BATTERY 
+	if messId == 1:#VOLTAGE
+            qFromArduino.put((2, messData, confData))
+        elif messId == 2:#CURRENT
+            qFromArduino.put((3, messData, confData))
+    elif messType == 3:#leak
+	print("**************SOS - LEAK DETECTED**************")
+        qFromArduino.put((4, messData, confData))
+	print("**************SOS - LEAK DETECTED**************")
 
 
 # def actuate_spear(send_input):
