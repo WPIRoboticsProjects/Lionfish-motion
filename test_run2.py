@@ -65,9 +65,11 @@ def main_loop(master, main_loop_queue, qFromArduino, qToArduino):
     down_ping_time = 0
     down_ping_conf = 0
     ping1, ping1_conf, ping2, ping2_conf = update_sensors(qFromArduino)
-    if check_lifeSupport(qFromArduino):
-        #kill processes and go to surface	
 
+    if check_lifeSupport(qFromArduino):
+        pass
+        #kill processes and go to surface
+    
     if ping1 != -100:
         forward_ping = ping1
         forward_ping_conf = ping1_conf
@@ -122,6 +124,7 @@ def main_loop(master, main_loop_queue, qFromArduino, qToArduino):
                 cmd_queue.put((1, down_ping, down_ping_time, ping2_conf))
 
             if check_lifeSupport(qFromArduino):
+                pass
                 #kill processes and go to surface
 
         except Exception as e:
@@ -169,9 +172,9 @@ def check_lifeSupport(q):
 
         for i in range(q.qsize()):
             val = q.get()
-           if val[0] == 2:
+            if val[0] == 2:
                battLow = True
-           elif val[0] == 3:
+            elif val[0] == 3:
                leakDetected = True
   
     return leakDetected or battLow
