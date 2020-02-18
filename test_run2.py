@@ -602,7 +602,7 @@ def recv_from_arduino(ser):
 
 
 def arduino_comms(qToArduino, qFromArduino):
-    ser = serial.Serial("/dev/serial/by-path/platform-70090000.xusb-usb-0:2.3:1.0", 115200, timeout=0)
+    ser = serial.Serial("/dev/serial/by-path/platform-70090000.xusb-usb-0:2.2:1.0", 115200, timeout=0)
 
     while True:
         if ser.inWaiting() > 0:
