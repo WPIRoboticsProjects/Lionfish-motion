@@ -351,21 +351,24 @@ def bottom_hold(master, in_time, throttle, target_distance, cmd_queue):
     end_time = time.time() + in_time
     
     ping1_ret, ping1_time_ret, ping1_conf, ping2_ret, ping2_time_ret, ping2_conf = check_sensors(cmd_queue)
-    ping2 = ping2_ret/1000    
+    if ping2_ret != -100:
+        ping2 = ping2_ret/1000    
     curr_depth = float(get_message(master)['alt'])
 
     while time.time() <= end_time:
         ping1_ret, ping1_time_ret, ping1_conf, ping2_ret, ping2_time_ret, ping2_conf = check_sensors(cmd_queue)
-        ping2 = ping2_ret/1000    
+        if ping2_ret != -100:
+            ping2 = ping2_ret/1000    
         curr_depth = float(get_message(master)['alt'])
-
-        if abs(ping2 - target_distance) > 0.2:
-            if ping2 > target_distance: 
-                desired_depth = curr_depth - ping2 + target_distance
-            else:
-                desired_depth = curr_depth + (target_distance - ping2)
-                
-            depth(master, throttle, desired_depth)
+        
+        if ping2 != -100:
+            if abs(ping2 - target_distance) > 0.2:
+                if ping2 > target_distance: 
+                    desired_depth = curr_depth - ping2 + target_distance
+                else:
+                    desired_depth = curr_depth + (target_distance - ping2)
+                    
+                depth(master, throttle, desired_depth)
 
 def roomba(master, in_time, throttle, cmd_queue):
     output = (throttle * 5) + 1500
