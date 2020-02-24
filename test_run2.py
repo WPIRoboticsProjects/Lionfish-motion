@@ -367,8 +367,9 @@ def bottom_hold(master, in_time, throttle, target_distance, cmd_queue):
                     desired_depth = curr_depth - ping2 + target_distance
                 else:
                     desired_depth = curr_depth + (target_distance - ping2)
-                    
+     
                 depth(master, throttle, desired_depth)
+                ping2 = -100
 
 def roomba(master, in_time, throttle, cmd_queue):
     output = (throttle * 5) + 1500
